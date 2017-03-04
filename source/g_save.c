@@ -516,6 +516,13 @@ void InitGame( void )
 	day_cycle = gi.cvar( "day_cycle", "10", 0 ); // Darkmatch cycle time.
 	use_flashlight = gi.cvar( "use_flashlight", "0", CVAR_SERVERINFO );
 	use_classic = gi.cvar( "use_classic", "0", CVAR_SERVERINFO ); // Reset Grenade Strength to 1.52
+	// BEGIN RATO
+	killaway = gi.cvar ("killaway", "1", 0);
+	kickaway = gi.cvar ("kickaway", "1", 0);
+	killawaytime = gi.cvar ("killawaytime", "60", 0);
+	kickawaytime = gi.cvar ("kickawaytime", "90", 0);
+	tk_punch = gi.cvar ("tk_punch", "0", 0);
+	// END RATO
 
 	CGF_SFX_InstallGlassSupport();	// william for CGF (glass fx)
 

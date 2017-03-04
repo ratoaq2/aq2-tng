@@ -1500,7 +1500,25 @@ void SP_worldspawn (edict_t * ent)
 	gi.soundindex("tng/disabled.wav");
 	gi.soundindex("tng/enabled.wav");
 	gi.soundindex("misc/flashlight.wav"); // Caching Flashlight
-
+	// RATO BEGIN
+	gi.soundindex ("tng/stole.wav");
+	gi.soundindex ("tng/stole2.wav");
+	gi.soundindex ("tng/ultrakill.wav");
+	gi.soundindex ("tng/monsterkill.wav");
+	gi.soundindex ("tng/humiliation.wav");
+	gi.soundindex ("tng/godlike.wav");
+	gi.soundindex ("tng/doublekill.wav");
+	gi.soundindex ("tng/multikill.wav");
+	gi.soundindex ("tng/perfect.wav");
+	gi.soundindex ("tng/dominating.wav");
+	gi.soundindex ("tng/unstoppable.wav");
+	gi.soundindex ("tng/prepare.wav");
+	gi.soundindex ("tng/goal.wav");
+	gi.soundindex ("tng/goal2.wav");
+	gi.soundindex ("tng/rampage.wav");
+	gi.soundindex ("tng/killingspree.wav");
+	gi.soundindex ("tng/firstblood.wav");
+	// RATO END
 
 	gi.soundindex("world/10_0.wav");	// countdown
 	gi.soundindex("world/xian1.wav");	// intermission music

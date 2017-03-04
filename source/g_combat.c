@@ -413,6 +413,45 @@ void VerifyHeadShot(vec3_t point, vec3_t dir, float height, vec3_t newpoint)
 
 #define HEAD_HEIGHT 12.0
 
+// RATO BEGIN
+void CheckSteal(edict_t *targ, edict_t *attacker, int damage, int last_health) {
+	int i;
+
+	if (!targ->client || !attacker->client) {
+	  return;
+	}
+
+	attacker->client->resp.damage_dealt += damage;
+
+	if (teamplay->value) {
+	  attacker->client->resp.rounddamage += damage;
+	}
+
+	if (targ->client->gonnadie && targ->client->attacker != attacker) {
+	  targ->client->last_attacker = targ->client->attacker;
+	}
+
+	targ->client->resp.attackerSnipperId = attacker->client->resp.sniperId;
+	targ->client->resp.attackerGrenadeId = attacker->client->resp.grenadeId;
+
+	if (!targ->client->gonnadie && last_health <= damage) {
+	  targ->client->gonnadie = true;
+	}
+
+	if (use_warnings->value && !level.firstblood && targ->client->bleeding) {
+	  level.firstblood = true;
+
+	  for (i = 1; i <= game.maxclients; i++) {
+	     if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+	        continue;
+	     }
+	     gi.centerprintf (&g_edicts[i], "First Blood %s!", attacker->client->pers.netname);
+	     stuffcmd (&g_edicts[i], "play tng/firstblood.wav\n");
+	  }
+	}
+}
+// RATO END
+
 void
 T_Damage (edict_t * targ, edict_t * inflictor, edict_t * attacker, vec3_t dir,
 	  vec3_t point, vec3_t normal, int damage, int knockback, int dflags,
@@ -427,18 +466,32 @@ T_Damage (edict_t * targ, edict_t * inflictor, edict_t * attacker, vec3_t dir,
 	int bleeding = 0;		// damage causes bleeding
 	int head_success = 0;
 	int instant_dam = 1;
+	int last_health = 100; // RATO ADDED
 	float z_rel;
 	int height, friendlyFire = 0, gotArmor = 0;
 	float from_top;
 	vec_t dist;
 	float targ_maxs2;		//FB 6/1/99
 
+	// RATO BEGIN
+	qboolean onSameTeam = OnSameTeam(targ, attacker);
+
+	if (targ && targ->client) {
+		if (mod == MOD_KICK && !onSameTeam) {
+			targ->client->resp.kicked = true;
+		} else if (targ->client->resp.kicked && mod != MOD_FALLING) {
+			targ->client->resp.kicked = false;
+		}
+		last_health = targ->health;
+	}
+	// RATO END
+
 	// do this before teamplay check
 	if (!targ->takedamage)
 		return;
 
 	client = targ->client;
-	if (targ != attacker && OnSameTeam( targ, attacker ))
+	if (targ != attacker && onSameTeam) // RATO
 		friendlyFire = 1;
 
 	//FIREBLADE
@@ -844,6 +897,11 @@ T_Damage (edict_t * targ, edict_t * inflictor, edict_t * attacker, vec3_t dir,
 
 			if ((targ->svflags & SVF_MONSTER) || client)
 				targ->flags |= FL_NO_KNOCKBACK;
+			// RATO BEGIN
+			if (!onSameTeam) {
+				CheckSteal(targ, attacker, take, last_health);
+			}
+			// RATO END
 			Killed(targ, inflictor, attacker, take, point);
 			return;
 		}
@@ -885,6 +943,11 @@ T_Damage (edict_t * targ, edict_t * inflictor, edict_t * attacker, vec3_t dir,
 		}
 		if (attacker->client)
 		{
+			// RATO BEGIN AND CHANGED
+			if (!onSameTeam) {
+				CheckSteal(targ, attacker, damage, last_health);
+			}
+			// RATO END
 			if (!friendlyFire) {
 				attacker->client->resp.damage_dealt += damage;
 				if (mod > 0 && mod < MAX_GUNSTAT) {

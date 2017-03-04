@@ -746,8 +746,14 @@ void Cmd_Bandage_f(edict_t *ent)
 
 // function called in generic_weapon function that does the bandaging
 
-void Bandage(edict_t * ent)
+// RATO BEGIN
+void Bandage(edict_t * ent, qboolean skipCheck)
 {
+	int i;
+	qboolean check = !skipCheck && use_warnings->value &&
+			ent->deadflag != DEAD_DEAD && ent->client->gonnadie;
+	ent->client->gonnadie = false;
+// RATO END
 	ent->client->leg_noise = 0;
 	ent->client->leg_damage = 0;
 	ent->client->leghits = 0;
@@ -756,8 +762,20 @@ void Bandage(edict_t * ent)
 	ent->client->bandaging = 0;
 	ent->client->leg_dam_count = 0;
 	ent->client->attacker = NULL;
+	ent->client->last_attacker = NULL; // RATO ADDED
 	ent->client->bandage_stopped = 1;
 	ent->client->idle_weapon = BANDAGE_TIME;
+	// RATO BEGIN
+	if (check) {
+		for (i = 1; i <= game.maxclients; i++) {
+			if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+				continue;
+			}
+			gi.centerprintf(&g_edicts[i], "%s is godlike!", ent->client->pers.netname);
+			stuffcmd(&g_edicts[i], "play tng/godlike.wav\n");
+		}
+	}
+// RATO END
 }
 
 void Cmd_ID_f(edict_t * ent)
@@ -1110,7 +1128,7 @@ void Cmd_Ghost_f(edict_t * ent)
 	}
 
 	if (num_ghost_players == 0) {
-		gi.cprintf(ent, PRINT_HIGH, "No ghost match found\n");
+		gi.cprintf(ent, PRINT_HIGH, "No ghost match found for %s@%s\n", ent->client->pers.netname, ent->client->pers.ip); // RATO CHANGED
 		return;
 	}
 
@@ -1121,7 +1139,7 @@ void Cmd_Ghost_f(edict_t * ent)
 	}
 
 	if (i >= num_ghost_players) {
-		gi.cprintf( ent, PRINT_HIGH, "No ghost match found\n" );
+		gi.cprintf(ent, PRINT_HIGH, "No ghost match found for %s@%s\n", ent->client->pers.netname, ent->client->pers.ip); // RATO CHANGED
 		return;
 	}
 

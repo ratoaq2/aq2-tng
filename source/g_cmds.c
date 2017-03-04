@@ -363,7 +363,7 @@ qboolean OnSameTeam (edict_t * ent1, edict_t * ent2)
 	char ent1Team[128], ent2Team[128];
 
 	//FIREBLADE
-	if (!ent1->client || !ent2->client)
+	if (!ent1 || !ent2 || !ent1->client || !ent2->client) // RATO -> !ent1 || !ent2 ||
 		return false;
 
 	if (teamplay->value)
@@ -1702,6 +1702,20 @@ static void Cmd_Streak_f (edict_t * ent) {
 	gi.cprintf(ent,PRINT_HIGH, "Your Killing Streak is: %d\n", ent->client->resp.streakKills);
 }
 
+// RATO BEGIN
+static void Cmd_RoundKills_f(edict_t * ent) {
+	if (teamplay->value) {
+		gi.cprintf(ent,PRINT_HIGH, "Your Kills in current round is: %d\n",ent->client->resp.roundkills);
+	}
+}
+
+static void Cmd_RoundDamage_f(edict_t * ent) {
+	if (teamplay->value) {
+		gi.cprintf(ent,PRINT_HIGH, "Your Damage in current round is: %d\n",ent->client->resp.rounddamage);
+	}
+}
+// RATO END
+
 static void Cmd_LockTeam_f (edict_t * ent) {
 	Cmd_TeamLock_f(ent, 1);
 }
@@ -1835,6 +1849,7 @@ static cmdList_t commandList[] =
 	{ "choose", Cmd_Choose_f, 0 },
 	{ "tkok", Cmd_TKOk, 0 },
 	{ "time", Cmd_Time, 0 },
+	{ "aq2time", Cmd_Time, 0 }, // RATO
 	{ "voice", Cmd_Voice_f, CMDF_PAUSE },
 	{ "setflag1", Cmd_SetFlag1_f, CMDF_PAUSE|CMDF_CHEAT },
 	{ "setflag2", Cmd_SetFlag2_f, CMDF_PAUSE|CMDF_CHEAT },
@@ -1879,7 +1894,15 @@ static cmdList_t commandList[] =
 	{ "ignorepart", Cmd_IgnorePart_f, 0 },
 	{ "voteconfig", Cmd_Voteconfig_f, 0 },
 	{ "configlist", Cmd_Configlist_f, 0 },
-	{ "votescramble", Cmd_Votescramble_f, 0 }
+	{ "votescramble", Cmd_Votescramble_f, 0 },
+	// RATO BEGIN
+	{ "disable_warnings", Cmd_WarningsMode_f, 0 },
+	{ "cmd_disable_warnings", Cmd_WarningsMode_f, 0 },
+	{ "roundkills", Cmd_RoundKills_f, 0 },
+	{ "rounddamage", Cmd_RoundDamage_f, 0 },
+	{ "killaway", Cmd_KillAway_f, 0 },
+	{ "kickaway", Cmd_KickAway_f, 0 }
+	// RATO END
 };
 
 #define MAX_COMMAND_HASH 64
@@ -1956,3 +1979,119 @@ void ClientCommand (edict_t * ent)
 	Cmd_Say_f(ent, false, true, false);
 }
 
+// BEGIN RATO
+void Cmd_Away_f (edict_t * user, qboolean kick) {
+	int i;
+	int count = 0;
+	int index[256];
+	edict_t	*ent;
+	char *msg = NULL;
+	int timelimit = (kick ? kickawaytime->value : killawaytime->value);
+
+	if (lights_camera_action) {
+	  gi.cprintf(user, PRINT_HIGH, "Command temporaly disabled.\n");
+	  return;
+	}
+
+	if (kick && !kickaway->value) {
+	  gi.cprintf(user, PRINT_HIGH, "Kicking away players is not enabled on this server\n");
+	  return;
+	}
+
+	if (!kick && !killaway->value) {
+	  gi.cprintf(user, PRINT_HIGH, "Killing away players is not enabled on this server\n");
+	  return;
+	}
+
+	if (!kick && !killawaytime->value) {
+	  gi.cprintf(user, PRINT_HIGH, "The variable killawaytime is not enabled on this server.\n");
+	  return;
+	}
+
+	if (kick && !kickawaytime->value) {
+	  gi.cprintf(user, PRINT_HIGH, "The variable kickawaytime is not enabled on this server.\n");
+	  return;
+	}
+
+	for (i = 0; i < maxclients->value; i++) {
+	  if (game.clients[i].pers.connected) {
+	    index[count] = i;
+	    count++;
+	  }
+	}
+
+	for (i = 0; i < count; i++) {
+	  ent = &g_edicts[1 + index[i]];
+	  if (ent->client->resp.awaytime) {
+	  	if (level.time >= ent->client->resp.awaytime + timelimit) {
+        if (kick) {
+           KickClient(ent, "Player was away.");
+        } else {
+           Cmd_Kill_f(ent);
+        }
+				if (user == ent) {
+					if (IsNeutral(ent)) {
+					   msg = "itself";
+			    } else if (IsFemale(ent)){
+						msg = "herself";
+					} else {
+						msg = "himself";
+					}
+				} else {
+					msg = user->client->pers.netname;
+				}
+        gi.bprintf(PRINT_HIGH, "%s was away and %s %s%s.\n",
+            ent->client->pers.netname,
+            (kick ? "kicked" : "killed"),
+            (user == ent ? "" : "by "),
+            msg);
+        IRC_printf(IRC_T_DEATH, "%s was away and %s %s%s.",
+            ent->client->pers.netname,
+            (kick ? "kicked" : "killed"),
+            (user == ent ? "" : "by "),
+            msg);
+			}
+	  }
+	}
+
+   if (!msg) {
+      gi.cprintf(user, PRINT_HIGH, "There are no away players.\n");
+   }
+}
+
+void Cmd_KillAway_f (edict_t * ent) {
+	Cmd_Away_f(ent, false);
+}
+
+void Cmd_KickAway_f(edict_t * ent) {
+	Cmd_Away_f(ent, true);
+}
+
+void Cmd_WarningsMode_f(edict_t* ent, char *arg) {
+  int i;
+  char stuff[128];
+
+  // Ignore if there is no argument.
+  if (arg[0] != '\0') {
+    memset (stuff, 0, sizeof (stuff));
+
+    // Numerical
+    i = atoi (arg);
+
+    if (i > 1 || i < 0) {
+      gi.dprintf("Warning: disable_warnings set to %i by %s\n", i, ent->client->pers.netname);
+
+      // Force the old mode if it is valid else force 0
+      if (ent->client->resp.disable_warnings > 0 && ent->client->resp.disable_warnings < 2) {
+        sprintf(stuff, "set disable_warnings \"%i\"\n", ent->client->resp.disable_warnings);
+			} else {
+        sprintf(stuff, "set disable_warnings \"0\"\n");
+			}
+    } else {
+      sprintf(stuff, "set disable_warnings \"%i\"\n", i);
+      ent->client->resp.disable_warnings = i;
+    }
+    stuffcmd(ent, stuff);
+  }
+}
+// END RATO

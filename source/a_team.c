@@ -592,6 +592,13 @@ void CreditsReturnToMain (edict_t * ent, pmenu_t * p)
 	}
 }
 
+// RATO BEGIN
+void DoARatoSound (edict_t * ent, pmenu_t * p)
+{
+	unicastSound(ent, gi.soundindex("user/rato.wav"), 1.0);
+}
+// RATO END
+
 //PG BUND BEGIN
 void DoAGoodie (edict_t * ent, pmenu_t * p)
 {
@@ -634,6 +641,12 @@ void QuakeNigguhz (edict_t * ent, pmenu_t * p)
 pmenu_t creditsmenu[] = {
   {"*" TNG_VERSION, PMENU_ALIGN_CENTER, NULL, NULL},
   {"žžžžžžžžžžžžžžžžžžžžžžžžžŸ", PMENU_ALIGN_CENTER, NULL, NULL},
+  // RATO BEGIN
+  {"*Customized by", PMENU_ALIGN_LEFT, NULL, NULL},
+  {NULL, PMENU_ALIGN_LEFT, NULL, NULL},
+  {"[TA].Rato.", PMENU_ALIGN_LEFT, NULL, DoARatoSound},
+  {NULL, PMENU_ALIGN_LEFT, NULL, NULL},
+  // RATO END
   {"*Design Team", PMENU_ALIGN_LEFT, NULL, NULL},
   {NULL, PMENU_ALIGN_LEFT, NULL, NULL},
   {"Deathwatch", PMENU_ALIGN_LEFT, NULL, DoAGoodie},
@@ -759,7 +772,7 @@ void killPlayer( edict_t *ent, qboolean suicidePunish )
 	if (suicidePunish && punishkills->value)
 	{
 		edict_t *attacker = ent->client->attacker;
-		if (attacker && attacker != ent && attacker->client)
+		if (ent->client->gonnadie && attacker && attacker != ent && attacker->client) // RATO
 		{
 			char deathmsg[128];
 			Com_sprintf( deathmsg, sizeof( deathmsg ), "%s ph34rs %s so much %s committed suicide! :)\n",
@@ -1792,6 +1805,36 @@ qboolean CheckTimelimit( void )
 	return false;
 }
 
+// RATO
+edict_t *FindRoundWinner() {
+	edict_t *winner = NULL;
+	int i;
+
+	for (i = 1; i <= maxclients->value; i++) {
+		if (!winner ||
+			(g_edicts[i].inuse &&
+			(winner->client->resp.roundkills < g_edicts[i].client->resp.roundkills ||
+			(winner->client->resp.roundkills == g_edicts[i].client->resp.roundkills &&
+			winner->client->resp.rounddamage < g_edicts[i].client->resp.rounddamage)))) {
+			winner = &g_edicts[i];
+		}
+	}
+	return winner;
+}
+
+void ResetRoundKillsAndDamages() {
+	int i;
+	for (i = 1; i <= maxclients->value; i++) {
+		if (g_edicts[i].inuse) {
+			g_edicts[i].client->resp.roundkills = 0;
+			g_edicts[i].client->resp.rounddamage = 0;
+			g_edicts[i].client->resp.rampage = false;
+			g_edicts[i].client->resp.killingspree = false;
+		}
+	}
+}
+// RATO
+
 int WonGame(int winner);
 
 static qboolean CheckRoundTimeLimit( void )
@@ -1953,7 +1996,24 @@ int WonGame (int winner)
 					Cmd_Stats_f(cl_ent, arg);
 		}
 	}
+	// RATO BEGIN
+	player = FindRoundWinner();
 
+	if (player) {
+		if (player->client->resp.roundkills == 0) {
+			gi.bprintf(PRINT_HIGH, "%s wins the round with no kills and %d of damage\n", player->client->pers.netname, player->client->resp.roundkills, player->client->resp.rounddamage);
+			IRC_printf(IRC_T_GAME, "%s wins the round with no kills and %d of damage", player->client->pers.netname, player->client->resp.roundkills, player->client->resp.rounddamage);
+		} else if (player->client->resp.roundkills == 1) {
+			gi.bprintf(PRINT_HIGH, "%s wins the round with only %d kill and %d of damage\n", player->client->pers.netname, player->client->resp.roundkills, player->client->resp.rounddamage);
+			IRC_printf(IRC_T_GAME, "%s wins the round with only %d kill and %d of damage", player->client->pers.netname, player->client->resp.roundkills, player->client->resp.rounddamage);
+		} else if (player->client->resp.roundkills > 1) {
+			gi.bprintf(PRINT_HIGH, "%s wins the round with %d kills and %d of damage\n", player->client->pers.netname, player->client->resp.roundkills, player->client->resp.rounddamage);
+			IRC_printf(IRC_T_GAME, "%s wins the round with %d kills and %d of damage", player->client->pers.netname, player->client->resp.roundkills, player->client->resp.rounddamage);
+		}
+	}
+
+	ResetRoundKillsAndDamages();
+	// RATO END
 	return 0;
 }
 

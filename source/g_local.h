@@ -728,6 +728,8 @@ typedef struct
   char mapname[MAX_QPATH];	// the server name (base1, etc)
 
   char nextmap[MAX_QPATH];	// go here when fraglimit is hit
+
+  qboolean firstblood; // RATO ADDED
   //+
 
   char tempmap[MAX_QPATH];	//PG BUND
@@ -1085,6 +1087,14 @@ extern cvar_t *bholelimit;
 extern cvar_t *splatlife;
 extern cvar_t *bholelife;
 
+// BEGIN RATO
+extern cvar_t *killaway;
+extern cvar_t *kickaway;
+extern cvar_t *killawaytime;
+extern cvar_t *kickawaytime;
+extern cvar_t *tk_punch;
+// END RATO
+
 #define world   (&g_edicts[0])
 
 // item spawnflags
@@ -1140,6 +1150,12 @@ qboolean FloodCheck(edict_t *ent);
 void	Cmd_Help_f(edict_t *ent);
 void	Cmd_Score_f(edict_t *ent);
 void	Cmd_Inven_f(edict_t *ent);
+// BEGIN RATO
+void Cmd_KillAway_f(edict_t *ent);
+void Cmd_KickAway_f(edict_t *ent);
+void Cmd_Punish_f(edict_t *ent, qboolean disconnected);
+void Cmd_WarningsMode_f(edict_t *ent, char *arg);
+// END RATO
 edict_t *LookupPlayer(edict_t *ent, const char *text, qboolean checkNUM, qboolean checkNick);
 
 //
@@ -1458,6 +1474,35 @@ typedef struct
   int team_wounds;
   
   int idletime;
+  // RATO BEGIN
+  qboolean kicked;
+
+  int awaytime;
+  int lastawaywarn;
+
+  int roundkills;
+  int rounddamage;
+
+  qboolean killingspree;
+  qboolean rampage;
+
+  int killsSniperShot;
+  int timeSniperShot;
+  int sniperId;
+  int attackerSnipperId;
+
+  int killsGrenade;
+  int timeGrenadeShot;
+  int grenadeId;
+  int attackerGrenadeId;
+
+  int killsMP5;
+  int timeMP5Shot;
+
+  int killsM4;
+  int timeM4Shot;
+
+  // RATO END
   int tourneynumber;
   edict_t *kickvote;
 
@@ -1469,7 +1514,10 @@ typedef struct
 	
   int stat_mode;    		// Automatical Send of statistics to client
   int stat_mode_intermission;
-
+  // RATO BEGIN
+  int disable_warnings;
+  int warnings_mode_intermission;
+  // RATO END
   int shotsTotal;					//Total number of shots
   int hitsTotal;					//Total number of hits
   int streakKills;					//Kills in a row
@@ -1535,6 +1583,7 @@ struct gclient_s
 	vec3_t		damage_from;		// origin for vector calculation
 
 	float		killer_yaw;			// when dead, look at killer
+  	qboolean  gonnadie; // RATO ADDED
 
 	weaponstate_t	weaponstate;
 	vec3_t		kick_angles;		// weapon kicks
@@ -1652,6 +1701,7 @@ struct gclient_s
 	int			doortoggle;			// set by player with opendoor command
 
 	edict_t		*attacker;		// keep track of the last person to hit us
+	edict_t		*last_attacker; // RATO ADDED keep track of the last person to hit us
 	int			attacker_mod;	// and how they hit us
 	int			attacker_loc;	// location of the hit
 
@@ -1882,7 +1932,7 @@ void Cmd_Roundtimeleft_f(edict_t *ent); // AQ:TNG - DW added roundtimeleft
 void DropSpecialWeapon (edict_t * ent);
 void ReadySpecialWeapon (edict_t * ent);
 void DropSpecialItem (edict_t * ent);
-void Bandage (edict_t * ent);
+void Bandage (edict_t * ent, qboolean skipCheck); // RATO CHANGED
 void ShowGun (edict_t * ent);	// hentai's vwep function added by zucc
 void FL_think (edict_t * self);	// TNG Flashlight
 void FL_make (edict_t * self);	// TNG Flashlight

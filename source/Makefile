@@ -8,7 +8,7 @@ ifeq ($(GIT_REV),)
 GIT_REV=git
 endif
 PACKAGE=aq2-tng
-REL_VERSION=2.81
+REL_VERSION=2.81r3
 VERSION=$(REL_VERSION)~$(GIT_REV)
 
 # remember to update this for every release commit

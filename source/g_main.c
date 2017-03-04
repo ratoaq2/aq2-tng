@@ -447,6 +447,14 @@ cvar_t *radio_repeat_time;
 
 cvar_t *use_classic;		// Used to reset spread/gren strength to 1.52
 
+// BEGIN RATO
+cvar_t *killaway;
+cvar_t *kickaway;
+cvar_t *kickawaytime;
+cvar_t *killawaytime;
+cvar_t *tk_punch;
+// END RATO
+
 cvar_t *warmup;
 cvar_t *round_begin;
 cvar_t *spectator_hud;
@@ -1012,8 +1020,10 @@ void G_RunFrame (void)
 
 			if (i > 0 && i <= game.maxclients)
 			{
-				if (updateStatMode)
+				if (updateStatMode) { // RATO CHANGED
 					stuffcmd(ent, "cmd_stat_mode $stat_mode\n");
+					stuffcmd(ent, "cmd_disable_warnings $disable_warnings\n"); // RATO ADDED
+				} // RATO ADDED
 
 				// TNG Stats End
 

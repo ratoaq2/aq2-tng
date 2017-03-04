@@ -478,6 +478,13 @@ void fire_bullet_sparks (edict_t *self, vec3_t start, vec3_t aimdir, int damage,
 // zucc - for sniper
 void fire_bullet_sniper (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick, int hspread, int vspread, int mod)
 {
+	// RATO BEGIN
+	if (self && self->client) {
+		self->client->resp.killsSniperShot = 0;
+		self->client->resp.timeSniperShot = 0;
+		self->client->resp.sniperId = self->client->resp.sniperId %30 + 1;
+	}
+	// RATO END
 	setFFState (self);
 	fire_lead_ap (self, start, aimdir, damage, kick, TE_GUNSHOT, hspread, vspread, mod);
 }
@@ -749,6 +756,14 @@ void fire_grenade2(edict_t *self, vec3_t start, vec3_t aimdir, int damage,
 	vec3_t dir;
 	vec3_t forward, right, up;
 
+	// RATO BEGIN
+	if (self && self->client) {
+		self->client->resp.killsGrenade = 0;
+ 		self->client->resp.timeGrenadeShot = 0;
+		self->client->resp.grenadeId = self->client->resp.grenadeId % 10 + 1;
+	}
+	// RATO END
+
 	vectoangles(aimdir, dir);
 	AngleVectors(dir, forward, right, up);
 
@@ -801,7 +816,7 @@ void kick_attack (edict_t *ent)
 	trace_t tr;
 	vec3_t end;
 	char *genderstr;
-
+	qboolean onSameTeam; // RATO ADDED
 
 	AngleVectors(ent->client->v_angle, forward, right, NULL);
 
@@ -815,6 +830,8 @@ void kick_attack (edict_t *ent)
 	PRETRACE();
 	tr = gi.trace(ent->s.origin, NULL, NULL, end, ent, MASK_SHOT);
 	POSTTRACE();
+
+	onSameTeam = OnSameTeam(ent, tr.ent); // RATO ADDED
 
 	// don't need to check for water
 	if (tr.surface && (tr.surface->flags & SURF_SKY))
@@ -885,6 +902,7 @@ void punch_attack(edict_t * ent)
 	int randmodify;
 	trace_t tr;
 	char *genderstr;
+	qboolean onSameTeam; // RATO ADDED
 
 	AngleVectors(ent->client->v_angle, forward, right, NULL);
 	VectorScale(forward, 0, ent->client->kick_origin);
@@ -934,8 +952,10 @@ void punch_attack(edict_t * ent)
 			gi.sound(ent, CHAN_WEAPON, level.snd_kick, 1, ATTN_NORM, 0);
 			PlayerNoise(ent, ent->s.origin, PNOISE_SELF);
 
+			onSameTeam = OnSameTeam(ent, tr.ent); // RATO ADDED
 			//only hit weapon out of hand if damage >= 15
-			if (tr.ent->client && (tr.ent->client->curr_weap == M4_NUM
+			if (tr.ent->client && (!onSameTeam || (onSameTeam && tk_punch->value)) // RATO CHANGED
+				&& (tr.ent->client->curr_weap == M4_NUM // RATO CHANGED
 				|| tr.ent->client->curr_weap == MP5_NUM
 				|| tr.ent->client->curr_weap == M3_NUM
 				|| tr.ent->client->curr_weap == SNIPER_NUM

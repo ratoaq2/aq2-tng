@@ -359,6 +359,11 @@ void Add_Frag(edict_t * ent, int mod)
 		ent->client->resp.gunstats[mod].kills++;
 	}
 
+	// RATO BEGIN
+	if (teamplay->value) {
+		ent->client->resp.roundkills++;
+	}
+	// RATO END
 	if (teamplay->value && teamdm->value != 2)
 	{
 		ent->client->resp.score++;	// just 1 normal kill
@@ -639,7 +644,75 @@ void PrintDeathMessage(char *msg, edict_t * gibee)
 			gi.cprintf(other, PRINT_MEDIUM, "%s", msg);
 	}
 }
+// RATO BEGIN
+void PrintStealMessage(edict_t *self, edict_t *attacker) {
+	int i;
+	int n = rand() % 2 + 1;
 
+	if (self->client && attacker->client &&
+		self->client->last_attacker && self->client->last_attacker != attacker &&
+		self->client->last_attacker->client) {
+
+		if (use_warnings) {
+			for (i = 1; i <= game.maxclients; i++) {
+				if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+					continue;
+				}
+				gi.centerprintf (&g_edicts[i], "%s stole %s!",
+						attacker->client->pers.netname,
+						self->client->pers.netname);
+				stuffcmd (&g_edicts[i], n == 1 ? "play tng/stole.wav\n" : "play tng/stole2.wav\n");
+			}
+		}
+
+		gi.bprintf(PRINT_MEDIUM, "%s stole %s from %s!\n",
+				attacker->client->pers.netname,
+				self->client->pers.netname,
+				self->client->last_attacker->client->pers.netname);
+		IRC_printf(IRC_T_GAME, "%s stole %s from %s!",
+				attacker->client->pers.netname,
+				self->client->pers.netname,
+				self->client->last_attacker->client->pers.netname);
+	}
+}
+
+void KillingSpreeAndRampage(edict_t * attacker) {
+	int i;
+	int maxdamage = ctf->value ? 3000 : 1000;
+	int maxkills = ctf->value ? 9 : 3;
+
+	if (!teamplay->value) {
+		return;
+	}
+
+	if (!attacker->client->resp.rampage) {
+		if (attacker->client->resp.rounddamage >= maxdamage) {
+			attacker->client->resp.rampage = true;
+
+			for (i = 1; i <= game.maxclients; i++) {
+				if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+					continue;
+				}
+				gi.centerprintf (&g_edicts[i], "Rampage %s!", attacker->client->pers.netname);
+				stuffcmd (&g_edicts[i], "play tng/rampage.wav\n");
+			}
+		}
+	}
+	if (!attacker->client->resp.killingspree) {
+		if (attacker->client->resp.roundkills > maxkills) {
+			attacker->client->resp.killingspree = true;
+
+			for (i = 1; i <= game.maxclients; i++) {
+				if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+					continue;
+				}
+				gi.centerprintf (&g_edicts[i], "Killing Spree %s!", attacker->client->pers.netname);
+				stuffcmd (&g_edicts[i], "play tng/killingspree.wav\n");
+			}
+		}
+	}
+}
+// RATO END
 void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 {
 	int mod;
@@ -650,6 +723,14 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 	qboolean friendlyFire;
 	char *special_message = NULL;
 	int n;
+	// RATO BEGIN
+	int i;
+	qboolean onSameTeam = OnSameTeam(self, attacker);
+	self->client->resp.roundkills = 0;
+	self->client->resp.rounddamage = 0;
+	self->client->resp.rampage = false;
+	self->client->resp.killingspree = false;
+	// RATO END
 
 	self->client->resp.ctf_capstreak = 0;
 
@@ -758,6 +839,19 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 		if (special_message && self->client->attacker && self->client->attacker->client
 		&& (self->client->attacker->client != self->client))
 		{
+			// RATO BEGIN
+			KillingSpreeAndRampage(self->client->attacker);
+			n = rand() % 2 + 1;
+			if (use_warnings->value && !onSameTeam && self->client->resp.kicked) {
+				for (i = 1; i <= game.maxclients; i++) {
+					if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+						continue;
+					}
+					gi.centerprintf (&g_edicts[i], "GOAL %s!", self->client->attacker->client->pers.netname);
+					stuffcmd (&g_edicts[i], n == 1 ? "play tng/goal2.wav\n" : "play tng/goal.wav\n");
+				}
+			}
+			// RATO END
 			sprintf(death_msg, "%s %s %s\n",
 				self->client->pers.netname, special_message, self->client->attacker->client->pers.netname);
 			PrintDeathMessage(death_msg, self);
@@ -778,6 +872,7 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 			else
 			{
 				self->client->resp.streakKills = 0;
+				PrintStealMessage(self, attacker); // RATO ADDED
 				Add_Frag(self->client->attacker, MOD_UNKNOWN);
 				self->client->resp.deaths++;
 			}
@@ -845,6 +940,15 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 			}
 			break;
 		case MOD_MP5:
+			// RATO BEGIN
+			if (!onSameTeam) {
+				if (level.time >= attacker->client->resp.timeMP5Shot + 1) {
+					attacker->client->resp.killsMP5 = 0;
+				}
+				attacker->client->resp.killsMP5++;
+				attacker->client->resp.timeMP5Shot = level.time;
+			}
+			// RATO END
 			switch (loc) {
 			case LOC_HDAM:
 				message = "'s brains are on the wall thanks to";
@@ -873,6 +977,15 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 			}
 			break;
 		case MOD_M4:
+			// RATO BEGIN
+			if (!onSameTeam) {
+				if (level.time >= attacker->client->resp.timeM4Shot + 1) {
+					attacker->client->resp.killsM4 = 0;
+				}
+				attacker->client->resp.killsM4++;
+				attacker->client->resp.timeM4Shot = level.time;
+			}
+			// RATO END
 			switch (loc) {
 			case LOC_HDAM:
 				message = " had a makeover by";
@@ -928,6 +1041,12 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 			}
 			break;
 		case MOD_SNIPER:
+			// RATO BEGIN
+			if (!onSameTeam && self->client->resp.attackerSnipperId == attacker->client->resp.sniperId) {
+				attacker->client->resp.killsSniperShot++;
+				attacker->client->resp.timeSniperShot = level.time;
+			}
+			// RATO END
 			switch (loc) {
 			case LOC_HDAM:
 				if (self->client->ps.fov < 90) {
@@ -1073,6 +1192,18 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 			}
 			break;
 		case MOD_PUNCH:
+			// RATO BEGIN
+			if (use_warnings->value && !onSameTeam) {
+				for (i = 1; i <= game.maxclients; i++) {
+					if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+						continue;
+					}
+					gi.centerprintf (&g_edicts[i], "Prepare to fight with %s!",
+					self->client->attacker->client->pers.netname);
+					stuffcmd (&g_edicts[i], "play tng/prepare.wav\n");
+				}
+			}
+			// RATO END
 			n = rand() % 3 + 1;
 			if (n == 1) {
 				message = " got a free facelift by";
@@ -1103,6 +1234,12 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 			message2 = "'s handgrenade";
 			break;
 		case MOD_HG_SPLASH:
+			// RATO BEGIN
+			if (!onSameTeam && self->client->resp.attackerGrenadeId == attacker->client->resp.grenadeId) {
+				attacker->client->resp.killsGrenade++;
+				attacker->client->resp.timeGrenadeShot = level.time;
+			}
+			// RATO END
 			message = " didn't see";
 			message2 = "'s handgrenade";
 			break;
@@ -1122,6 +1259,7 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 
 		if (message)
 		{
+			KillingSpreeAndRampage(attacker); // RATO ADDED
 			sprintf(death_msg, "%s%s %s%s\n", self->client->pers.netname,
 			message, attacker->client->pers.netname, message2);
 			PrintDeathMessage(death_msg, self);
@@ -1138,10 +1276,13 @@ void ClientObituary(edict_t * self, edict_t * inflictor, edict_t * attacker)
 				}
 			} else {
 				if (!teamplay->value || mod != MOD_TELEFRAG) {
-					Add_Frag(attacker, mod);
-					attacker->client->radio_num_kills++;
-					self->client->resp.streakKills = 0;
-					self->client->resp.deaths++;
+					PrintStealMessage(self, attacker); // RATO ADDED
+					if (!onSameTeam) { // RATO ADDED
+						Add_Frag(attacker, mod);
+						attacker->client->radio_num_kills++;
+						self->client->resp.streakKills = 0;
+						self->client->resp.deaths++;
+					} // RATO ADDED
 				}
 			}
 
@@ -1336,6 +1477,9 @@ player_die
 void player_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point)
 {
 	int n, mod;
+	// RATO BEGIN
+	int i;
+	// RATO END
 
 	VectorClear(self->avelocity);
 
@@ -1412,7 +1556,7 @@ void player_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage
 	self->client->resp.sniper_mode = SNIPER_1X;
 	self->client->desired_fov = 90;
 	self->client->ps.fov = 90;
-	Bandage(self);		// clear up the leg damage when dead sound?
+	Bandage(self, true);		// RATO CHANGED // clear up the leg damage when dead sound?
 	self->client->bandage_stopped = 0;
 
 	// clear inventory
@@ -1437,6 +1581,30 @@ void player_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage
 	if ((((self->health < -35) && (mod == MOD_HC)) ||
 		((self->health < -20) && (mod == MOD_M3))) && (sv_gib->value)) {
 		gi.sound(self, CHAN_BODY, gi.soundindex("misc/udeath.wav"), 1, ATTN_NORM, 0);
+		// RATO BEGIN
+		if (use_warnings->value && !OnSameTeam(self, attacker)) {
+			n = rand() % 3 + 1;
+			for (i = 1; i <= game.maxclients; i++) {
+				if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+					continue;
+				}
+				if (n == 1) {
+			  		gi.centerprintf (&g_edicts[i], "%s triturated %s!",
+						attacker->client->pers.netname,
+						self->client->pers.netname);
+				} else if (n == 2) {
+					gi.centerprintf (&g_edicts[i], "%s pulverized %s!",
+						attacker->client->pers.netname,
+						self->client->pers.netname);
+				} else {
+					gi.centerprintf (&g_edicts[i], "%s vaporized %s!",
+						attacker->client->pers.netname,
+						self->client->pers.netname);
+				}
+				stuffcmd (&g_edicts[i], mod == MOD_HC ? "play tng/monsterkill.wav\n" : "play tng/ultrakill.wav\n");
+			}
+		}
+		// RATO END
 		for (n = 0; n < 5; n++)
 			ThrowGib(self, "models/objects/gibs/sm_meat/tris.md2", damage, GIB_ORGANIC);
 		ThrowClientHead(self, damage);
@@ -1496,7 +1664,10 @@ void player_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage
 	self->client->curr_weap = MK23_NUM;
 
 	self->client->resp.idletime = 0;
-
+	// RATO BEGIN
+	self->client->resp.awaytime = 0;
+	self->client->resp.lastawaywarn = 0;
+	// RATO END
 	// zucc solves problem of people stopping doors while in their dead bodies
 	// ...only need it in DM though...
 	// ...for teamplay, non-solid will get set soon after in CopyToBodyQue
@@ -2430,6 +2601,14 @@ void ClientBeginDeathmatch(edict_t * ent)
 	}
 
 
+	// RATO BEGIN
+	ent->client->resp.awaytime = 0;
+	ent->client->resp.lastawaywarn = 0;
+        ent->client->resp.sniperId = 0;
+        ent->client->resp.attackerSnipperId = -1;
+        ent->client->resp.grenadeId = 0;
+        ent->client->resp.attackerGrenadeId = -1;
+	// RATO END
 	TourneyNewPlayer(ent);
 	vInitClient(ent);
 
@@ -2724,6 +2903,7 @@ void ClientDisconnect(edict_t * ent)
 	ent->classname = "disconnected";
 	ent->svflags = SVF_NOCLIENT;
 	ent->client->pers.connected = false;
+	ent->client->resp.disable_warnings = 0; // RATO ADDED
 }
 
 void CreateGhost(edict_t * ent)
@@ -2819,6 +2999,12 @@ void ClientThink(edict_t * ent, usercmd_t * ucmd)
 				client->resp.stat_mode_intermission = 1;
 				Cmd_Stats_f(ent, ltm);
 			}
+			// RATO BEGIN
+			if (ent->client->resp.disable_warnings > 0 && ent->client->resp.warnings_mode_intermission == 0) {
+				ent->client->resp.warnings_mode_intermission = 1;
+				Cmd_WarningsMode_f(ent, ltm);
+			}
+			// RATO END
 		}
 		// can exit intermission after five seconds
 		if (level.realFramenum > level.intermission_framenum + 5 * HZ && (ucmd->buttons & BUTTON_ANY))
@@ -2993,6 +3179,85 @@ void ClientThink(edict_t * ent, usercmd_t * ucmd)
 			client->ps.pmove.pm_flags &= ~PMF_JUMP_HELD;
 		}
 	}
+
+	// RATO BEGIN
+	if (!lights_camera_action && (killawaytime->value || kickawaytime->value)) {
+		if (ent->solid != SOLID_NOT && ent->deadflag != DEAD_DEAD) {
+			if (ucmd->forwardmove == 0 && ucmd->sidemove == 0) {
+				if (client->resp.awaytime) {
+					if (client->resp.lastawaywarn != client->resp.awaytime &&
+						(level.time >= client->resp.awaytime + killawaytime->value ||
+						level.time >= client->resp.awaytime + kickawaytime->value)) {
+					        gi.centerprintf(ent, "You're away.\n");
+						client->resp.lastawaywarn = client->resp.awaytime;
+					}
+				} else {
+					client->resp.awaytime = level.time;
+				}
+			} else {
+				client->resp.awaytime = 0;
+				client->resp.lastawaywarn = 0;
+			}
+		}
+	}
+
+	if (use_warnings->value) {
+		if (client->resp.killsSniperShot > 1 && client->resp.timeSniperShot > 0 && level.time >= client->resp.timeSniperShot + 1) {
+			for (i = 1; i <= game.maxclients; i++) {
+				if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+					continue;
+				}
+				if (client->resp.killsSniperShot == 2) {
+					gi.centerprintf (&g_edicts[i], "Double Kill %s!", client->pers.netname);
+					stuffcmd (&g_edicts[i], "play tng/doublekill.wav\n");
+				} else {
+					gi.centerprintf (&g_edicts[i], "Multi Kill %s (%dx)!", client->pers.netname, client->resp.killsSniperShot);
+					stuffcmd (&g_edicts[i], "play tng/multikill.wav\n");
+				}
+			}
+			client->resp.timeSniperShot = 0;
+			client->resp.killsSniperShot = 0;
+		}
+		if (client->resp.killsGrenade > 1 && client->resp.timeGrenadeShot > 0 && level.time >= client->resp.timeGrenadeShot + 3) {
+			for (i = 1; i <= game.maxclients; i++) {
+				if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+					continue;
+				}
+				gi.centerprintf (&g_edicts[i], "%s was perfect!", client->pers.netname);
+				stuffcmd (&g_edicts[i], "play tng/perfect.wav\n");
+			}
+			client->resp.timeGrenadeShot = 0;
+			client->resp.killsGrenade = 0;
+		}
+		if (client->resp.killsMP5 > 1 && client->resp.timeMP5Shot > 0 && level.time >= client->resp.timeMP5Shot + 1) {
+			for (i = 1; i <= game.maxclients; i++) {
+				if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+					continue;
+				}
+				gi.centerprintf (&g_edicts[i], "%s is dominating!", client->pers.netname);
+				stuffcmd (&g_edicts[i], "play tng/dominating.wav\n");
+			}
+			client->resp.timeMP5Shot = 0;
+			client->resp.killsMP5 = 0;
+		}
+
+		if (client->resp.killsM4 > 1 && client->resp.timeM4Shot > 0 && level.time >= client->resp.timeM4Shot + 1) {
+			for (i = 1; i <= game.maxclients; i++) {
+				if (!g_edicts[i].inuse || g_edicts[i].client->resp.disable_warnings) {
+					continue;
+				}
+				gi.centerprintf (&g_edicts[i], "%s is unstoppable!", client->pers.netname);
+				stuffcmd (&g_edicts[i], "play tng/unstoppable.wav\n");
+			}
+			client->resp.timeM4Shot = 0;
+			client->resp.killsM4 = 0;
+		}
+	}
+
+	if (!client->gonnadie && ent->health < 4 && client->bleeding && !ent->client->bandaging) {
+		client->gonnadie = true;
+	}
+	// RATO END
 
 	if (ucmd->forwardmove || ucmd->sidemove || client->oldbuttons != client->buttons) {
 		client->resp.idletime = 0;

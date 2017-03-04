@@ -1603,7 +1603,7 @@ Weapon_Generic (edict_t * ent, int FRAME_ACTIVATE_LAST, int FRAME_FIRE_LAST,
 	{
 	  if (!(ent->client->idle_weapon))
 	    {
-	      Bandage (ent);
+	      Bandage (ent, false); // RATO CHANGED
 	      return;
 	    }
 	  else
@@ -3275,7 +3275,7 @@ Weapon_Generic_Knife (edict_t * ent, int FRAME_ACTIVATE_LAST,
 		{
 			if (!(ent->client->idle_weapon))
 			{
-				Bandage (ent);
+				Bandage (ent, false); // RATO CHANGED
 				//ent->client->weaponstate = WEAPON_ACTIVATING;
 				//                ent->client->ps.gunframe = 0;
 			}
@@ -3807,7 +3807,7 @@ void Weapon_Gas (edict_t * ent)
 		{
 			if (!(ent->client->idle_weapon))
 			{
-				Bandage (ent);
+				Bandage (ent, false); // RATO
 			}
 			else
 				(ent->client->idle_weapon)--;
